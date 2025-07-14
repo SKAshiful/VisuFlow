@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DataViz Lab - SVG Charts (Enhanced)</title>
+
+    <!-- html2canvas CDN (for capturing SVG container as image for PNG export) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <!-- SheetJS (xlsx) CDN for Excel import/export -->
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+
+    <style>
+        /* Basic Reset & Body */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f7f6;
+            color: #333;
+            line-height: 1.6;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        header {
+            background-color: #2c3e50;
+            color: #fff;
+            padding: 1rem 2rem;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 1.8rem;
+            white-space: nowrap;
+        }
+
+        nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        nav button, .input-controls button, .config-controls button, #tableControls button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 0.7rem 1.2rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background-color 0.3s ease, transform 0.1s ease;
+        }
+
+        nav button:hover, .input-controls button:hover, .config-controls button:hover, #tableControls button:hover {
+            background-color: #2980b9;
+            transform: translateY(-1px);
+        }
+
+        main {
+            flex-grow: 1;
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+
+        @media (min-width: 992px) { /* Larger screens: Two columns */
+            main {
+                grid-template-columns: 1fr 2fr;
+            }
+            .data-input-section, .chart-config-section {
+                grid-column: 1 / 2; /* These take the first column */
+            }
+            .chart-display-section {
+                grid-column: 2 / 3; /* This takes the second column */
+                grid-row: 1 / span 2; /* Spans both rows on the right */
+            }
+        }
+
+        section {
+            background-color: #fff;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        h2 {
+            color: #2c3e50;
+            margin-top: 0;
+            margin-bottom: 1rem;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 0.5rem;
+        }
+
+        input[type="text"], select {
+            width: 100%;
+            padding: 0.8rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 1rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.4rem;
+            font-weight: bold;
+            color: #555;
+            flex-shrink: 0; /* Prevent label from shrinking */
+        }
+
+        .input-controls, .config-controls {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .color-pickers {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            align-items: center;
+            margin-top: 1rem;
+        }
+
+        .color-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .color-group input[type="color"] {
+            width: 40px; /* Adjust size */
+            height: 30px;
+            padding: 0;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            cursor: pointer;
+            box-sizing: content-box; /* Include padding/border in specified width/height */
+        }
+
+        .chart-container {
+            flex-grow: 1; /* Allow container to take available height */
+            position: relative;
+            min-height: 400px; /* Ensure chart has minimum height */
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden; /* Ensure SVG content doesn't spill */
+        }
+
+        .chart-svg {
+            width: 100%;
+            height: 100%;
+            overflow: visible; /* Allows labels/titles to extend */
+        }
+
+        /* Editable Table Styles */
+        #editableDataTableContainer {
+            max-height: 300px;
+            overflow: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            background-color: #fff;
+            width: 100%;
+            margin-top: 1rem;
+        }
+
+        #editableDataTableContainer table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9em;
+        }
+
+        #editableDataTableContainer th,
+        #editableDataTableContainer td {
+            padding: 8px;
+            border: 1px solid #f0f0f0;
+            text-align: left;
+            min-width: 80px; /* Ensure some width for cells */
+            white-space: nowrap; /* Prevent wrapping */
+        }
+
+        #editableDataTableContainer th {
+            background-color: #f8f8f8;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        #editableDataTableContainer tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        #editableDataTableContainer td[contenteditable="true"]:focus,
+        #editableDataTableContainer th[contenteditable="true"]:focus {
+            outline: 2px solid #3498db;
+            background-color: #eaf6ff;
+        }
+
+        #editableDataTableContainer .delete-btn-cell {
+            width: 30px;
+            text-align: center;
+            padding: 0;
+            border: none; /* Remove border for the button cell */
+            background-color: transparent;
+        }
+        #editableDataTableContainer .delete-btn-cell button {
+            background: none;
+            border: none;
+            color: #e74c3c;
+            font-size: 1.2em;
+            cursor: pointer;
+            padding: 0 5px;
+            transition: color 0.2s ease;
+        }
+        #editableDataTableContainer .delete-btn-cell button:hover {
+            color: #c0392b;
+        }
+
+        #tableControls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>DataViz Lab</h1>
+        <nav>
+            <button id="saveBtn">Save Project</button>
+            <button id="loadBtn">Load Project</button>
+            <select id="exportTypeSelect">
+                <option value="csv">CSV</option>
+                <option value="json">JSON</option>
+                <option value="xlsx">Excel</option>
+            </select>
+            <button id="exportDataBtn">Export Data</button>
+            <input type="file" id="importDataInput" accept=".json,.csv,.xlsx" style="display: none;">
+            <button id="importDataBtn">Import Data</button>
+            <button id="downloadSvgBtn">Download Chart SVG</button>
+            <button id="downloadPngBtn">Download Chart PNG</button>
+        </nav>
+    </header>
+
+    <main>
+        <section class="data-input-section">
+            <h2>1. Enter Your Data</h2>
+            <div id="editableDataTableContainer">
+                <!-- Editable table will be inserted here by JS -->
+            </div>
+            <div id="tableControls">
+                <button id="addRowBtn">Add Row</button>
+                <button id="addColumnBtn">Add Column</button>
+            </div>
+            <div class="input-controls">
+                <button id="updateChartFromTableBtn">Update Chart</button>
+            </div>
+        </section>
+
+        <section class="chart-config-section">
+            <h2>2. Configure Your Chart</h2>
+            <div class="config-controls">
+                <div>
+                    <label for="chartType">Chart Type:</label>
+                    <select id="chartType">
+                        <option value="bar">Bar Chart</option>
+                        <option value="line">Line Chart</option>
+                        <option value="area">Area Chart</option>
+                        <option value="scatter">Scatter Chart</option>
+                        <option value="pie">Pie Chart</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="chartTitle">Chart Title:</label>
+                    <input type="text" id="chartTitle" placeholder="My Awesome Chart">
+                </div>
+                <div>
+                    <label for="xAxisLabel">X-Axis Label:</label>
+                    <input type="text" id="xAxisLabel" placeholder="Categories">
+                </div>
+                <div>
+                    <label for="yAxisLabel">Y-Axis Label:</label>
+                    <input type="text" id="yAxisLabel" placeholder="Values">
+                </div>
+            </div>
+
+            <div class="color-pickers" id="colorPickersContainer">
+                <h3>Series Colors:</h3>
+                <!-- Color pickers will be dynamically generated here -->
+            </div>
+            <button id="triggerChartUpdateBtn">Apply Settings</button>
+        </section>
+
+        <section class="chart-display-section">
+            <h2>3. Your Chart</h2>
+            <div class="chart-container" id="chartSvgContainer">
+                <!-- SVG chart will be dynamically inserted here -->
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // DOM Elements
+        const editableDataTableContainer = document.getElementById('editableDataTableContainer');
+        const addRowBtn = document.getElementById('addRowBtn');
+        const addColumnBtn = document.getElementById('addColumnBtn');
+        const updateChartFromTableBtn = document.getElementById('updateChartFromTableBtn');
+        
+        const chartTypeSelect = document.getElementById('chartType');
+        const chartTitleInput = document.getElementById('chartTitle');
+        const xAxisLabelInput = document.getElementById('xAxisLabel');
+        const yAxisLabelInput = document.getElementById('yAxisLabel');
+        const colorPickersContainer = document.getElementById('colorPickersContainer');
+        const triggerChartUpdateBtn = document.getElementById('triggerChartUpdateBtn');
+        const chartSvgContainer = document.getElementById('chartSvgContainer');
+
+        const saveBtn = document.getElementById('saveBtn');
+        const loadBtn = document.getElementById('loadBtn');
+        const exportTypeSelect = document.getElementById('exportTypeSelect'); // New select for export type
+        const exportDataBtn = document.getElementById('exportDataBtn');
+        const importDataBtn = document.getElementById('importDataBtn');
+        const importDataInput = document.getElementById('importDataInput');
+        const downloadSvgBtn = document.getElementById('downloadSvgBtn'); // New SVG download
+        const downloadPngBtn = document.getElementById('downloadPngBtn'); // New PNG download
+
+        // State variables for data and chart config
+        let tableData = [
+            ['Category', 'Series A', 'Series B'],
+            ['Jan', '10', '20'],
+            ['Feb', '30', '15'],
+            ['Mar', '25', '35'],
+            ['Apr', '12', '40']
+        ]; // 2D array to represent the table data
+
+        let currentChartData = {
+            labels: [],
+            datasets: []
+        };
+        let currentChartConfig = {
+            type: 'bar',
+            title: 'My Awesome Chart',
+            xAxisLabel: 'Categories',
+            yAxisLabel: 'Values',
+            colors: ['#4CAF50', '#2196F3', '#FFC107', '#E91E63', '#9C27B0', '#00BCD4', '#8BC34A', '#FF9800', '#F4436', '#673AB7'] // Default palette
+        };
+
+        // Chart dimensions (fixed for SVG drawing, container will scale it)
+        const SVG_WIDTH = 800;
+        const SVG_HEIGHT = 500;
+        const PADDING = { top: 60, right: 40, bottom: 80, left: 60 }; // Padding for chart content within SVG
+
+        // --- Data Table Management ---
+
+        function renderDataTable() {
+            let tableHTML = '<table>';
+            tableHTML += '<thead><tr>';
+            tableData[0].forEach((header, colIndex) => {
+                tableHTML += `<th contenteditable="true" data-col-index="${colIndex}">${header} <button class="delete-col-btn" data-col-index="${colIndex}">x</button></th>`;
+            });
+            tableHTML += `<th></th>`; // For row delete buttons (invisible header)
+            tableHTML += '</tr></thead><tbody>';
+
+            for (let rowIndex = 1; rowIndex < tableData.length; rowIndex++) {
+                tableHTML += `<tr>`;
+                tableData[rowIndex].forEach((cellValue, colIndex) => {
+                    tableHTML += `<td contenteditable="true" data-row-index="${rowIndex}" data-col-index="${colIndex}">${cellValue}</td>`;
+                });
+                tableHTML += `<td class="delete-btn-cell"><button class="delete-row-btn" data-row-index="${rowIndex}">x</button></td>`;
+                tableHTML += `</tr>`;
+            }
+            tableHTML += '</tbody></table>';
+            editableDataTableContainer.innerHTML = tableHTML;
+
+            // Add event listeners for cell edits
+            editableDataTableContainer.querySelectorAll('[contenteditable="true"]').forEach(cell => {
+                cell.addEventListener('input', (e) => {
+                    const rowIdx = parseInt(e.target.dataset.rowIndex || 0); // Headers are row 0
+                    const colIdx = parseInt(e.target.dataset.colIndex);
+                    tableData[rowIdx][colIdx] = e.target.textContent;
+                });
+            });
+
+            // Add event listeners for delete buttons
+            editableDataTableContainer.querySelectorAll('.delete-row-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const rowIdx = parseInt(e.target.dataset.rowIndex);
+                    deleteRow(rowIdx);
+                });
+            });
+            editableDataTableContainer.querySelectorAll('.delete-col-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const colIdx = parseInt(e.target.dataset.colIndex);
+                    deleteColumn(colIdx);
+                });
+            });
+        }
+
+        function addRow() {
+            const newRow = Array(tableData[0].length).fill('');
+            tableData.push(newRow);
+            renderDataTable();
+        }
+
+        function addColumn() {
+            tableData.forEach(row => row.push(''));
+            renderDataTable();
+        }
+
+        function deleteRow(rowIndex) {
+            if (tableData.length <= 2) { // Keep at least one data row + headers
+                alert("Cannot delete all data rows. Must keep at least one data row.");
+                return;
+            }
+            tableData.splice(rowIndex, 1);
+            renderDataTable();
+            updateChartFromTableBtn.click(); // Update chart after data change
+        }
+
+        function deleteColumn(colIndex) {
+            if (tableData[0].length <= 1) { // Keep at least one column (for labels)
+                alert("Cannot delete the last column.");
+                return;
+            }
+            tableData.forEach(row => row.splice(colIndex, 1));
+            renderDataTable();
+            updateChartFromTableBtn.click(); // Update chart after data change
+        }
+
+        // --- Data Parsing from Table ---
+        function parseTableData() {
+            if (tableData.length < 2 || tableData[0].length < 1) { // At least headers and one data row/column
+                return { labels: [], datasets: [] };
+            }
+
+            const headers = tableData[0];
+            const labels = [];
+            const datasets = [];
+
+            // Populate labels (first column)
+            for (let i = 1; i < tableData.length; i++) {
+                labels.push(tableData[i][0]);
+            }
+
+            // Populate datasets (subsequent columns)
+            for (let colIdx = 1; colIdx < headers.length; colIdx++) {
+                const data = [];
+                for (let rowIdx = 1; rowIdx < tableData.length; rowIdx++) {
+                    const value = parseFloat(tableData[rowIdx][colIdx]);
+                    data.push(isNaN(value) ? 0 : value); // Convert to number, default to 0 if invalid
+                }
+                datasets.push({
+                    label: headers[colIdx],
+                    data: data,
+                    color: currentChartConfig.colors[colIdx - 1] || getRandomColor()
+                });
+            }
+
+            return { labels, datasets };
+        }
+
+        // --- SVG Chart Rendering Functions ---
+
+        function createSVGElement(tag, attributes = {}, textContent = '') {
+            const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+            for (const key in attributes) {
+                el.setAttribute(key, attributes[key]);
+            }
+            if (textContent) {
+                el.textContent = textContent;
+            }
+            return el;
+        }
+
+        function renderChart() {
+            chartSvgContainer.innerHTML = ''; // Clear previous SVG
+            if (currentChartData.labels.length === 0 || (currentChartData.datasets.length === 0 && currentChartConfig.type !== 'pie')) {
+                chartSvgContainer.innerHTML = '<p style="text-align: center; margin-top: 50px;">No data to display. Please enter data in the table and click "Update Chart".</p>';
+                return;
+            }
+
+            const svg = createSVGElement('svg', {
+                width: '100%',
+                height: '100%',
+                viewBox: `0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`,
+                xmlns: 'http://www.w3.org/2000/svg', // Important for standalone SVG
+                class: 'chart-svg'
+            });
+
+            // Chart area dimensions (excluding padding)
+            const chartWidth = SVG_WIDTH - PADDING.left - PADDING.right;
+            const chartHeight = SVG_HEIGHT - PADDING.top - PADDING.bottom;
+
+            // Find max value for Y-axis scaling (or for pie chart total)
+            const allValues = currentChartData.datasets.flatMap(ds => ds.data);
+            const maxValue = Math.max(...allValues, 0); // Ensure min is 0
+            const yAxisMax = maxValue > 0 ? maxValue * 1.1 : 10; // Add some buffer, avoid division by zero
+
+
+            // Scales
+            const xScale = (index) => PADDING.left + (index / currentChartData.labels.length) * chartWidth;
+            const yScale = (value) => PADDING.top + chartHeight - (value / yAxisMax) * chartHeight;
+            
+            // X-axis band scale for bar charts (width of each category)
+            const xBandWidth = chartWidth / currentChartData.labels.length;
+
+            // Draw Axes (for non-circular charts)
+            if (currentChartConfig.type !== 'pie') {
+                const gAxes = createSVGElement('g', { class: 'axes' });
+                // X-Axis line
+                gAxes.appendChild(createSVGElement('line', {
+                    x1: PADDING.left, y1: yScale(0),
+                    x2: PADDING.left + chartWidth, y2: yScale(0),
+                    stroke: '#555', 'stroke-width': 1
+                }));
+                // Y-Axis line
+                gAxes.appendChild(createSVGElement('line', {
+                    x1: PADDING.left, y1: yScale(0),
+                    x2: PADDING.left, y2: PADDING.top,
+                    stroke: '#555', 'stroke-width': 1
+                }));
+                svg.appendChild(gAxes);
+
+                // Draw Y-Axis labels and grid lines
+                const numYAxisTicks = 5;
+                for (let i = 0; i <= numYAxisTicks; i++) {
+                    const value = (i / numYAxisTicks) * yAxisMax;
+                    const y = yScale(value);
+
+                    // Tick mark
+                    gAxes.appendChild(createSVGElement('line', {
+                        x1: PADDING.left - 5, y1: y,
+                        x2: PADDING.left, y2: y,
+                        stroke: '#777', 'stroke-width': 1
+                    }));
+
+                    // Label (more visible font-size and fill)
+                    gAxes.appendChild(createSVGElement('text', {
+                        x: PADDING.left - 10, y: y + 3,
+                        'text-anchor': 'end',
+                        'font-size': '12px',
+                        fill: '#555'
+                    }, value.toFixed(yAxisMax > 100 ? 0 : 1)));
+                    
+                    // Grid line
+                    if (i > 0) { // Don't draw grid line at base
+                        gAxes.appendChild(createSVGElement('line', {
+                            x1: PADDING.left, y1: y,
+                            x2: PADDING.left + chartWidth, y2: y,
+                            stroke: '#eee', 'stroke-dasharray': '2,2'
+                        }));
+                    }
+                }
+
+                // Draw X-Axis labels
+                currentChartData.labels.forEach((label, i) => {
+                    const x = xScale(i) + xBandWidth / 2;
+                    gAxes.appendChild(createSVGElement('text', {
+                        x: x, y: SVG_HEIGHT - PADDING.bottom + 20,
+                        'text-anchor': 'middle',
+                        'font-size': '12px',
+                        fill: '#555'
+                    }, label));
+                });
+
+                // Add axis labels
+                svg.appendChild(createSVGElement('text', {
+                    x: PADDING.left + chartWidth / 2, y: SVG_HEIGHT - 20,
+                    'text-anchor': 'middle',
+                    'font-size': '14px',
+                    fill: '#333'
+                }, currentChartConfig.xAxisLabel));
+
+                svg.appendChild(createSVGElement('text', {
+                    x: PADDING.left - 40, y: PADDING.top + chartHeight / 2,
+                    'text-anchor': 'middle',
+                    transform: `rotate(-90 ${PADDING.left - 40},${PADDING.top + chartHeight / 2})`,
+                    'font-size': '14px',
+                    fill: '#333'
+                }, currentChartConfig.yAxisLabel));
+            }
+
+
+            // Add chart title
+            svg.appendChild(createSVGElement('text', {
+                x: SVG_WIDTH / 2, y: PADDING.top / 2,
+                'text-anchor': 'middle',
+                'font-size': '18px',
+                'font-weight': 'bold',
+                fill: '#333'
+            }, currentChartConfig.title));
+
+
+            // Draw Chart Data (based on type)
+            const gChart = createSVGElement('g', { class: 'chart-data' });
+            svg.appendChild(gChart);
+
+            const chartType = currentChartConfig.type;
+            const datasetCount = currentChartData.datasets.length;
+            const barWidthPerCategory = xBandWidth / (datasetCount > 0 ? datasetCount : 1);
+
+            if (chartType === 'bar') {
+                currentChartData.datasets.forEach((dataset, dsIndex) => {
+                    const seriesColor = currentChartConfig.colors[dsIndex] || getRandomColor();
+                    dataset.color = seriesColor; // Update dataset with chosen color for legend
+
+                    dataset.data.forEach((value, i) => {
+                        const barX = xScale(i) + (barWidthPerCategory * dsIndex);
+                        const barY = yScale(value);
+                        const barHeight = yScale(0) - barY;
+
+                        gChart.appendChild(createSVGElement('rect', {
+                            x: barX, y: barY,
+                            width: barWidthPerCategory * 0.8,
+                            height: barHeight,
+                            fill: seriesColor,
+                            class: 'chart-bar' // For CSS transition
+                        }));
+                    });
+                });
+            } else if (chartType === 'line' || chartType === 'area') {
+                currentChartData.datasets.forEach((dataset, dsIndex) => {
+                    const seriesColor = currentChartConfig.colors[dsIndex] || getRandomColor();
+                    dataset.color = seriesColor;
+
+                    let pathData = '';
+                    let areaPathData = `M ${xScale(0) + xBandWidth / 2} ${yScale(0)}`; // Start area path at bottom-left
+
+                    dataset.data.forEach((value, i) => {
+                        const x = xScale(i) + xBandWidth / 2;
+                        const y = yScale(value);
+                        if (i === 0) {
+                            pathData += `M ${x} ${y}`;
+                        } else {
+                            pathData += `L ${x} ${y}`;
+                        }
+                        areaPathData += `L ${x} ${y}`;
+
+                        // Add circles for points
+                        gChart.appendChild(createSVGElement('circle', {
+                            cx: x, cy: y, r: 4,
+                            fill: seriesColor,
+                            stroke: '#fff', 'stroke-width': 1.5,
+                            class: 'chart-point' // For CSS transition
+                        }));
+                    });
+
+                    if (chartType === 'area') {
+                        areaPathData += `L ${xScale(currentChartData.labels.length - 1) + xBandWidth / 2} ${yScale(0)} Z`; // Close area path
+                        gChart.appendChild(createSVGElement('path', {
+                            d: areaPathData,
+                            fill: seriesColor,
+                            opacity: 0.3, // Make area semi-transparent
+                            class: 'chart-area'
+                        }));
+                    }
+                    gChart.appendChild(createSVGElement('path', {
+                        d: pathData,
+                        stroke: seriesColor,
+                        fill: 'none',
+                        'stroke-width': 2,
+                        class: 'chart-line' // For CSS transition
+                    }));
+                });
+            } else if (chartType === 'scatter') {
+                // Scatter expects first dataset to be pairs like [{x:val, y:val}, ...]
+                // For simplicity, we'll assume the first data column (after labels) is X, and second is Y for series 1.
+                // Or if only one data column, labels are X and that column is Y.
+                if (currentChartData.datasets.length > 0) {
+                    const dataset = currentChartData.datasets[0]; // Primary dataset for Y values
+                    const seriesColor = currentChartConfig.colors[0] || getRandomColor();
+                    dataset.color = seriesColor;
+
+                    // Determine X values: Use label index as X for simple categorical scatter,
+                    // or if multiple data columns, use first data column as X, second as Y.
+                    let xValues = currentChartData.labels.map((_, i) => i); // Default to index
+                    let yValues = dataset.data;
+
+                    if (currentChartData.datasets.length >= 2) {
+                        // If there are at least two data series, assume first is X, second is Y
+                        xValues = currentChartData.datasets[0].data; // X values from first data column
+                        yValues = currentChartData.datasets[1].data; // Y values from second data column
+                        dataset.label = `${currentChartData.datasets[0].label} vs ${currentChartData.datasets[1].label}`; // Adjust legend label
+                    }
+
+                    // Re-calculate max X value for scaling if X is numeric data
+                    const currentXAxisMax = Math.max(...xValues, 0) * 1.1;
+                    const scatterXScale = (value) => PADDING.left + (value / currentXAxisMax) * chartWidth;
+                    // Note: Y Scale remains based on original yAxisMax
+
+                    xValues.forEach((xVal, i) => {
+                        const yVal = yValues[i];
+                        if (yVal === undefined || isNaN(yVal)) return;
+
+                        const x = scatterXScale(xVal);
+                        const y = yScale(yVal); // Use the existing Y scale
+
+                        gChart.appendChild(createSVGElement('circle', {
+                            cx: x, cy: y, r: 6,
+                            fill: seriesColor,
+                            stroke: '#fff', 'stroke-width': 2,
+                            class: 'chart-point'
+                        }));
+                    });
+                }
+            }
+            else if (chartType === 'pie') {
+                // Pie chart logic (only uses the first dataset for simplicity, common for pie)
+                if (currentChartData.datasets.length > 0) {
+                    const pieData = currentChartData.datasets[0].data; // Use data from the first series
+                    const total = pieData.reduce((sum, val) => sum + val, 0);
+                    const radius = Math.min(chartWidth, chartHeight) / 2 * 0.8;
+                    const centerX = PADDING.left + chartWidth / 2;
+                    const centerY = PADDING.top + chartHeight / 2;
+                    let startAngle = 0;
+
+                    currentChartData.labels.forEach((label, i) => {
+                        const sliceValue = pieData[i] || 0; // Handle cases where data might be missing for a label
+                        if (total === 0) return; // Avoid division by zero
+
+                        const sliceColor = currentChartConfig.colors[i] || getRandomColor();
+                        const angle = (sliceValue / total) * 2 * Math.PI;
+                        const endAngle = startAngle + angle;
+
+                        const x1 = centerX + radius * Math.cos(startAngle);
+                        const y1 = centerY + radius * Math.sin(startAngle);
+                        const x2 = centerX + radius * Math.cos(endAngle);
+                        const y2 = centerY + radius * Math.sin(endAngle);
+
+                        const largeArcFlag = angle > Math.PI ? 1 : 0;
+                        const pathD = `M ${centerX},${centerY} L ${x1},${y1} A ${radius},${radius} 0 ${largeArcFlag},1 ${x2},${y2} Z`;
+
+                        gChart.appendChild(createSVGElement('path', {
+                            d: pathD,
+                            fill: sliceColor,
+                            stroke: '#fff', 'stroke-width': 2,
+                            class: 'chart-pie-slice'
+                        }));
+
+                        // Add slice label (optional, can get crowded)
+                        const midAngle = startAngle + angle / 2;
+                        const labelRadius = radius * 0.7; // Position label slightly inside
+                        const labelX = centerX + labelRadius * Math.cos(midAngle);
+                        const labelY = centerY + labelRadius * Math.sin(midAngle);
+                        
+                        gChart.appendChild(createSVGElement('text', {
+                            x: labelX, y: labelY,
+                            'text-anchor': 'middle',
+                            'font-size': '10px',
+                            fill: '#fff', 'text-shadow': '0 0 2px #000', // Basic shadow for visibility
+                        }, `${label} (${((sliceValue / total) * 100).toFixed(1)}%)`));
+
+                        startAngle = endAngle;
+                    });
+                }
+            }
+
+
+            // Draw Legend
+            const gLegend = createSVGElement('g', { class: 'legend' });
+            let legendY = SVG_HEIGHT - 40; // Position above X-axis label
+
+            let legendItems = [];
+            if (chartType === 'pie') {
+                // For pie, legend is based on labels and their assigned colors from config
+                currentChartData.labels.forEach((label, i) => {
+                    legendItems.push({ label: label, color: currentChartConfig.colors[i] || getRandomColor() });
+                });
+            } else {
+                // For other charts, legend is based on datasets
+                currentChartData.datasets.forEach((ds, i) => {
+                    legendItems.push({ label: ds.label, color: ds.color });
+                });
+            }
+
+            let currentLegendX = PADDING.left;
+            const legendPadding = 20; // Space between legend items
+            const swatchSize = 10;
+            const textOffset = 15;
+
+            legendItems.forEach((item, i) => {
+                const textWidth = item.label.length * 7; // Approximate text width
+                if (currentLegendX + swatchSize + textOffset + textWidth > SVG_WIDTH - PADDING.right && i > 0) {
+                    currentLegendX = PADDING.left; // New row for legend
+                    legendY -= 20; // Move up for next row
+                }
+
+                gLegend.appendChild(createSVGElement('rect', {
+                    x: currentLegendX, y: legendY - (swatchSize / 2),
+                    width: swatchSize, height: swatchSize,
+                    fill: item.color
+                }));
+                gLegend.appendChild(createSVGElement('text', {
+                    x: currentLegendX + textOffset, y: legendY + 4,
+                    'font-size': '12px',
+                    fill: '#444'
+                }, item.label));
+                currentLegendX += swatchSize + textOffset + textWidth + legendPadding;
+            });
+            svg.appendChild(gLegend);
+
+            chartSvgContainer.appendChild(svg);
+        }
+
+        // --- Utility Functions ---
+
+        function getRandomColor() {
+            const letters = '0123456789ABCDEF';
+            let color = '#';
+            for (let i = 0; i < 6; i++) {
+                color += letters[Math.floor(Math.random() * 16)];
+            }
+            return color;
+        }
+
+        function createColorPickerForDataset(index, label, currentColor) {
+            const colorGroupDiv = document.createElement('div');
+            colorGroupDiv.className = 'color-group';
+            
+            const colorInput = document.createElement('input');
+            colorInput.type = 'color';
+            colorInput.id = `chartColor${index}`;
+            colorInput.value = currentColor || getRandomColor();
+            colorInput.dataset.index = index;
+
+            const labelElem = document.createElement('label');
+            labelElem.htmlFor = `chartColor${index}`;
+            labelElem.textContent = label;
+
+            colorGroupDiv.appendChild(labelElem);
+            colorGroupDiv.appendChild(colorInput);
+            colorPickersContainer.appendChild(colorGroupDiv);
+
+            colorInput.addEventListener('change', (e) => {
+                currentChartConfig.colors[index] = e.target.value;
+                triggerChartUpdateBtn.click(); // Re-render chart with new color
+            });
+        }
+
+        function renderColorPickers() {
+            colorPickersContainer.innerHTML = '<h3>Series Colors:</h3>'; // Clear previous pickers
+            
+            if (currentChartConfig.type === 'pie' && currentChartData.labels.length > 0) {
+                // For pie charts, colors correspond to labels (slices)
+                currentChartData.labels.forEach((label, index) => {
+                    createColorPickerForDataset(index, label, currentChartConfig.colors[index]);
+                });
+            } else {
+                // For other charts, colors correspond to datasets (series)
+                currentChartData.datasets.forEach((ds, index) => {
+                    createColorPickerForDataset(index, ds.label, currentChartConfig.colors[index]);
+                });
+            }
+        }
+
+
+        // --- Event Listeners ---
+
+        // Event listener for updating chart from table data
+        updateChartFromTableBtn.addEventListener('click', () => {
+            currentChartData = parseTableData();
+            renderColorPickers(); // Re-render color pickers based on new data
+            renderChart();
+        });
+
+        // Event listener for applying chart configuration changes
+        triggerChartUpdateBtn.addEventListener('click', () => {
+            currentChartConfig.type = chartTypeSelect.value;
+            currentChartConfig.title = chartTitleInput.value;
+            currentChartConfig.xAxisLabel = xAxisLabelInput.value;
+            currentChartConfig.yAxisLabel = yAxisLabelInput.value;
+            
+            // Update colors from currently rendered pickers in currentChartConfig.colors
+            const colorInputs = colorPickersContainer.querySelectorAll('input[type="color"]');
+            currentChartConfig.colors = Array.from(colorInputs).map(input => input.value);
+            
+            // Re-assign colors to datasets as well, in case color pickers were not manually changed
+            currentChartData.datasets.forEach((ds, index) => {
+                ds.color = currentChartConfig.colors[index] || getRandomColor();
+            });
+
+            renderChart();
+        });
+
+        // Sync config inputs with current config (useful on load)
+        function syncConfigInputs() {
+            chartTypeSelect.value = currentChartConfig.type;
+            chartTitleInput.value = currentChartConfig.title;
+            xAxisLabelInput.value = currentChartConfig.xAxisLabel;
+            yAxisLabelInput.value = currentChartConfig.yAxisLabel;
+            renderColorPickers(); // Ensure color pickers match loaded config
+        }
+
+
+        // --- Save/Load Project (using localStorage) ---
+        saveBtn.addEventListener('click', () => {
+            const projectData = {
+                tableData: tableData, // Save the raw table data
+                chartConfig: currentChartConfig,
+            };
+            try {
+                localStorage.setItem('dataVizLabProjectSVG_v3', JSON.stringify(projectData)); // Use a new key for this version
+                alert('Project saved successfully!');
+            } catch (e) {
+                alert('Failed to save project. Local storage might be full or blocked.');
+                console.error('Save error:', e);
+            }
+        });
+
+        loadBtn.addEventListener('click', () => {
+            const savedProject = localStorage.getItem('dataVizLabProjectSVG_v3'); // Use new key
+            if (savedProject) {
+                try {
+                    const projectData = JSON.parse(savedProject);
+                    tableData = projectData.tableData;
+                    currentChartConfig = projectData.chartConfig;
+                    
+                    renderDataTable(); // Render the loaded table data
+                    currentChartData = parseTableData(); // Parse table data to chart data format
+                    syncConfigInputs(); // Update the config fields
+                    renderChart(); // Render chart based on loaded data/config
+                    alert('Project loaded successfully!');
+                } catch (e) {
+                    alert('Failed to load project. Saved data might be corrupt.');
+                    console.error('Load error:', e);
+                }
+            } else {
+                alert('No saved project found!');
+            }
+        });
+
+        // --- Export Data (CSV/JSON/Excel) ---
+        exportDataBtn.addEventListener('click', () => {
+            const exportType = exportTypeSelect.value;
+            let exportContent;
+            let filename;
+
+            if (exportType === 'csv') {
+                exportContent = tableData.map(row => row.join(',')).join('\n');
+                filename = `dataVizLab_data_${new Date().toLocaleDateString()}.csv`;
+                const dataStr = `data:text/csv;charset=utf-8,` + encodeURIComponent(exportContent);
+                downloadFile(dataStr, filename);
+            } else if (exportType === 'json') {
+                const headers = tableData[0];
+                const jsonData = [];
+                for (let i = 1; i < tableData.length; i++) {
+                    const rowObject = {};
+                    tableData[i].forEach((cellValue, colIndex) => {
+                        rowObject[headers[colIndex]] = cellValue;
+                    });
+                    jsonData.push(rowObject);
+                }
+                exportContent = JSON.stringify(jsonData, null, 2); // Pretty print JSON
+                filename = `dataVizLab_data_${new Date().toLocaleDateString()}.json`;
+                const dataStr = `data:text/json;charset=utf-8,` + encodeURIComponent(exportContent);
+                downloadFile(dataStr, filename);
+            } else if (exportType === 'xlsx') {
+                const ws = XLSX.utils.aoa_to_sheet(tableData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+                const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+                filename = `dataVizLab_data_${new Date().toLocaleDateString()}.xlsx`;
+                downloadFile(new Blob([wbout], { type: 'application/octet-stream' }), filename);
+            }
+        });
+
+        // Helper function for file downloads
+        function downloadFile(data, filename) {
+            const downloadAnchorNode = document.createElement('a');
+            if (data instanceof Blob) {
+                downloadAnchorNode.href = URL.createObjectURL(data);
+            } else {
+                downloadAnchorNode.href = data; // Assumes data is a data URL string
+            }
+            downloadAnchorNode.download = filename;
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+            if (data instanceof Blob) {
+                URL.revokeObjectURL(downloadAnchorNode.href); // Clean up Blob URL
+            }
+        }
+
+
+        // --- Import Data (CSV/JSON/Excel) ---
+        importDataBtn.addEventListener('click', () => {
+            importDataInput.click(); // Trigger the hidden file input
+        });
+
+        importDataInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const fileContent = e.target.result;
+                let newTableData = [];
+
+                if (file.name.endsWith('.csv')) {
+                    const lines = fileContent.trim().split('\n');
+                    newTableData = lines.map(line => line.split(',').map(item => item.trim()));
+                } else if (file.name.endsWith('.json')) {
+                    try {
+                        const jsonData = JSON.parse(fileContent);
+                        if (Array.isArray(jsonData) && jsonData.length > 0) {
+                            const headers = Object.keys(jsonData[0]);
+                            newTableData = [headers];
+                            jsonData.forEach(row => {
+                                newTableData.push(headers.map(header => row[header]));
+                            });
+                        } else {
+                            alert("Imported JSON must be an array of objects.");
+                            return;
+                        }
+                    } catch (err) {
+                        alert("Invalid JSON file.");
+                        console.error(err);
+                        return;
+                    }
+                } else if (file.name.endsWith('.xlsx')) {
+                    try {
+                        const workbook = XLSX.read(fileContent, { type: 'array' });
+                        const sheetName = workbook.SheetNames[0]; // Get the first sheet
+                        const worksheet = workbook.Sheets[sheetName];
+                        newTableData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }); // Convert to array of arrays
+                        if (newTableData.length === 0) {
+                            alert("Excel file is empty or could not be parsed.");
+                            return;
+                        }
+                    } catch (err) {
+                        alert("Error parsing Excel file. Make sure it's a valid .xlsx file.");
+                        console.error(err);
+                        return;
+                    }
+                } else {
+                    alert("Unsupported file type. Please import .csv, .json, or .xlsx files.");
+                    return;
+                }
+
+                tableData = newTableData; // Update global tableData
+                renderDataTable(); // Re-render table with imported data
+                updateChartFromTableBtn.click(); // Automatically parse and render after import
+            };
+
+            // Read file based on type for XLSX
+            if (file.name.endsWith('.xlsx')) {
+                reader.readAsArrayBuffer(file);
+            } else {
+                reader.readAsText(file);
+            }
+        });
+
+        // --- SVG Download ---
+        downloadSvgBtn.addEventListener('click', () => {
+            const svgElement = chartSvgContainer.querySelector('svg');
+            if (!svgElement) {
+                alert("No chart to download. Generate a chart first.");
+                return;
+            }
+
+            // Important: clone and remove temporary IDs to prevent conflicts
+            const clonedSvg = svgElement.cloneNode(true);
+            clonedSvg.removeAttribute('id'); // Remove ID if present to avoid conflicts
+
+            // Get the raw SVG string
+            const svgString = new XMLSerializer().serializeToString(clonedSvg);
+            const filename = `${currentChartConfig.title || 'chart'}.svg`;
+            const dataStr = `data:image/svg+xml;charset=utf-8,` + encodeURIComponent(svgString);
+            downloadFile(dataStr, filename);
+        });
+
+        // --- PNG Download ---
+        downloadPngBtn.addEventListener('click', () => {
+            const svgElement = chartSvgContainer.querySelector('svg');
+            if (!svgElement) {
+                alert("No chart to download. Generate a chart first.");
+                return;
+            }
+
+            // html2canvas takes a screenshot of the DOM element
+            html2canvas(chartSvgContainer, {
+                scale: 2, // Increase scale for better quality PNG
+                useCORS: true, // Necessary if any external resources (e.g., fonts) are loaded
+                backgroundColor: '#fff' // Set background color for the image
+            }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const filename = `${currentChartConfig.title || 'chart'}.png`;
+                downloadFile(imgData, filename);
+            }).catch(error => {
+                console.error("Error generating PNG:", error);
+                alert("Failed to generate PNG. Check console for details.");
+            });
+        });
+
+
+        // Initial setup on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            renderDataTable(); // Initial render of the empty table
+            // Try to load a previously saved project
+            loadBtn.click();
+            
+            // If no project was loaded (or it failed), parse initial data and render chart
+            if (tableData.length === 1 && tableData[0][0] === 'Category') { // Check if default initial data is still there
+                // This condition means `tableData` was not loaded from localStorage
+                tableData = [
+                    ['Category', 'Series A', 'Series B'],
+                    ['Jan', '10', '20'],
+                    ['Feb', '30', '15'],
+                    ['Mar', '25', '35'],
+                    ['Apr', '12', '40']
+                ];
+                renderDataTable();
+            }
+            updateChartFromTableBtn.click(); // Automatically parse table data and render initial chart
+            syncConfigInputs(); // Ensure config inputs match current state
+        });
+
+        // Event listeners for table controls
+        addRowBtn.addEventListener('click', addRow);
+        addColumnBtn.addEventListener('click', addColumn);
+
+    </script>
+</body>
+</html>
